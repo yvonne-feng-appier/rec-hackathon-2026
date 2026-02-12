@@ -8,17 +8,15 @@ on:
 env:
   VENDOR_CONFIG_FILE_PATH: "config-template/vendors.yaml"
   PR_BRANCH_NAME: "update-vendor-base-action"
+  VAULT_ADDR: 'https://vault.appier.us/'
+  VAULT_APPROLE: 'ai-jenkins-gcp'
+  VAULT_KEY_PATH: 'secret/project/recommendation'
+  CHART_DIR: './deploy/rec-vendor-api'
+  CONSUL_TEMPLATE_VERSION: '0.36.0'
 
 jobs:
   run-e2e:
     runs-on: ubuntu-latest
-    # needs: update-vendor
-    env:
-      VAULT_ADDR: 'https://vault.appier.us/'
-      VAULT_APPROLE: 'ai-jenkins-gcp'
-      VAULT_KEY_PATH: 'secret/project/recommendation'
-      CHART_DIR: './deploy/rec-vendor-api'
-      CONSUL_TEMPLATE_VERSION: '0.36.0'
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -57,23 +55,14 @@ jobs:
 
       - name: Run E2E tests with server
         env:
-          DEV_NAME: ${{ github.actor }}-github-action-${{ github.run_id }}
           GOPRIVATE: github.com/plaxieappier
         run: |
           # Download private modules if needed
           GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_rec_common" go mod download || true
-          # Pass environment variables to Docker container for Robot Framework
-          CONFIG_API_USR="${{ secrets.CONFIG_API_USR }}" CONFIG_API_PW="${{ secrets.CONFIG_API_PW }}" make run-e2e-with-server
+          make run-e2e-with-server
 
   manual-test-all:
     runs-on: ubuntu-latest
-    # needs: update-vendor
-    env:
-      VAULT_ADDR: 'https://vault.appier.us/'
-      VAULT_APPROLE: 'ai-jenkins-gcp'
-      VAULT_KEY_PATH: 'secret/project/recommendation'
-      CHART_DIR: './deploy/rec-vendor-api'
-      CONSUL_TEMPLATE_VERSION: '0.36.0'
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -115,9 +104,7 @@ jobs:
             fi
       - name: Run Manual Test All
         env:
-          DEV_NAME: ${{ github.actor }}-github-action-${{ github.run_id }}
           GOPRIVATE: github.com/plaxieappier
-          CI: "true"  # Mark as CI environment for test script
         run: |
           # Download private modules if needed
           GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_rec_common" go mod download || true

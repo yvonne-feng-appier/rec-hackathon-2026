@@ -172,7 +172,6 @@ run-e2e: config-dev
 	rm -f -r ${RF_REPORT_DIR}
 	-docker run --rm \
 		--add-host=host.docker.internal:host-gateway -l ${RF_TAG} -v $(shell pwd):/rec-vendor-api \
-		-e CONFIG_API_USR -e CONFIG_API_PW \
 		${DOCKER_RF_REPO}:${RF_TAG} \
 		bash -c "cd /rec-vendor-api; mkdir ${RF_REPORT_DIR}; \
 		pabot --pabotlib --resourcefile ${RF_CONFIG} --quiet -v ENV:dev -d ${RF_REPORT_DIR}/rec-vendor-api \

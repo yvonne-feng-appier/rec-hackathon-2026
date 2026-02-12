@@ -42,6 +42,11 @@ env:
   VENDOR_CONFIG_FILE_PATH: "config-template/vendors.yaml"
   PR_BRANCH_NAME: "github-action/update-vendor"
   BUILDER_FILE_PATH: "internal/strategy/builder.go"
+  VAULT_ADDR: 'https://vault.appier.us/'
+  VAULT_APPROLE: 'ai-jenkins-gcp'
+  VAULT_KEY_PATH: 'secret/project/recommendation'
+  CHART_DIR: './deploy/rec-vendor-api'
+  CONSUL_TEMPLATE_VERSION: '0.36.0'
 
 jobs:
   update-vendor:
@@ -290,13 +295,6 @@ jobs:
     needs:
       - update-vendor
     runs-on: ubuntu-latest
-    # needs: update-vendor
-    env:
-      VAULT_ADDR: 'https://vault.appier.us/'
-      VAULT_APPROLE: 'ai-jenkins-gcp'
-      VAULT_KEY_PATH: 'secret/project/recommendation'
-      CHART_DIR: './deploy/rec-vendor-api'
-      CONSUL_TEMPLATE_VERSION: '0.36.0'
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -312,7 +310,7 @@ jobs:
           consul_template_version: ${{ env.CONSUL_TEMPLATE_VERSION }}
           go_version: '1.25.6'
 
-      - name: Fetch Config API Data for E2E Tests
+      - name: Test Config API Connectivity
         id: fetch_config_api
         uses: fjogeleit/http-request-action@v1
         continue-on-error: true
@@ -327,10 +325,9 @@ jobs:
       - name: Verify Config API Connectivity
         run: |
             if [ "${{ steps.fetch_config_api.outcome }}" == "success" ]; then
-                echo "✅ Config API is accessible - test will use live Config API data"
+                echo "✅ Config API is accessible"
             else
                 echo "⚠️ Config API might not be accessible from GitHub Actions runner"
-                echo "The test will use fallback default subids if Config API calls fail"
             fi
 
       - name: Run E2E tests with server
@@ -340,19 +337,12 @@ jobs:
         run: |
           # Download private modules if needed
           GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_rec_common" go mod download || true
-          # Pass environment variables to Docker container for Robot Framework
-          CONFIG_API_USR="${{ secrets.CONFIG_API_USR }}" CONFIG_API_PW="${{ secrets.CONFIG_API_PW }}" make run-e2e-with-server
+          make run-e2e-with-server
 
   manual-test-all:
     needs:
       - update-vendor
     runs-on: ubuntu-latest
-    env:
-      VAULT_ADDR: 'https://vault.appier.us/'
-      VAULT_APPROLE: 'ai-jenkins-gcp'
-      VAULT_KEY_PATH: 'secret/project/recommendation'
-      CHART_DIR: './deploy/rec-vendor-api'
-      CONSUL_TEMPLATE_VERSION: '0.36.0'
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -394,9 +384,7 @@ jobs:
             fi
       - name: Run Manual Test All
         env:
-          DEV_NAME: ${{ github.actor }}-github-action-${{ github.run_id }}
           GOPRIVATE: github.com/plaxieappier
-          CI: "true"  # Mark as CI environment for test script
         run: |
           # Download private modules if needed
           GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_rec_common" go mod download || true
