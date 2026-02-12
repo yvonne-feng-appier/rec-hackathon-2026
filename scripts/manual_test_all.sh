@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-# Run tests
+echo "Running all vendor tests..."
+echo "--------------------------------"
+
 ./scripts/manual_test.sh inl_corp_1 650alldb2 300 300
 ./scripts/manual_test.sh inl_corp_1 dynamicntdw1 1200 627
 
