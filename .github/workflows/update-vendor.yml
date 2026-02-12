@@ -44,6 +44,7 @@ env:
   BUILDER_FILE_PATH: "internal/strategy/builder.go"
 
 jobs:
+
   update-vendor:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ fromJSON(format('{0}', github.event.inputs.timeout_minutes || 15)) }}
