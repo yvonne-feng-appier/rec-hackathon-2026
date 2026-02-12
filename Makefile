@@ -168,7 +168,7 @@ portforward-dev:
 
 
 .PHONY: run-e2e
-run-e2e:
+run-e2e: config-dev
 	rm -f -r ${RF_REPORT_DIR}
 	-docker run --rm \
 		-it --add-host=host.docker.internal:host-gateway -l ${RF_TAG} -v $(shell pwd):/rec-vendor-api ${DOCKER_RF_REPO}:${RF_TAG} \
