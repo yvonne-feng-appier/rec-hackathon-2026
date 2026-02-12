@@ -254,6 +254,64 @@ func TestDefault(t *testing.T) {
 			},
 			wantURL: "https://host.keeta/api/recommend?bizType=bType&campaignId=camp+id&channelToken=FAKE-TOKEN&ip=127.0.0.1&lat=12.34&lon=56.78&reqId=cl+ick%40id&sceneType=FAKE-SCENE-TYPE&ver=0",
 		},
+		// linkmine vendor tests
+		{
+			name: "GIVEN linkmine request URL with valid parameters THEN return expected URL",
+			urlPattern: config.URLPattern{
+				URL: "https://test",
+				Queries: []config.Query{
+					{Key: "app_code", Value: "{subid}"},
+					{Key: "device_id", Value: "{user_id_lower}"},
+				},
+			},
+			params: Params{
+				SubID:  "test-subid-123",
+				UserID: "TestUserID",
+			},
+			wantURL: "https://test?app_code=test-subid-123&device_id=testuserid",
+		},
+		{
+			name: "GIVEN linkmine tracking URL with valid parameters THEN return expected URL",
+			urlPattern: config.URLPattern{
+				URL: "{product_url}",
+				Queries: []config.Query{
+					{Key: "subparam", Value: "{click_id_base64}"},
+				},
+			},
+			params: Params{
+				ProductURL: "https://www.coupang.com/vp/products/12345",
+				ClickID:    "click-test-id",
+			},
+			wantURL: "https://www.coupang.com/vp/products/12345?subparam=Y2xpY2stdGVzdC1pZA",
+		},
+		{
+			name: "GIVEN linkmine request URL with missing SubID THEN return error",
+			urlPattern: config.URLPattern{
+				URL: "https://test",
+				Queries: []config.Query{
+					{Key: "app_code", Value: "{subid}"},
+					{Key: "device_id", Value: "{user_id_lower}"},
+				},
+			},
+			params: Params{
+				UserID: "TestUserID",
+			},
+			expectedErr: "subID not provided",
+		},
+		{
+			name: "GIVEN linkmine request URL with missing UserID THEN return error",
+			urlPattern: config.URLPattern{
+				URL: "https://test",
+				Queries: []config.Query{
+					{Key: "app_code", Value: "{subid}"},
+					{Key: "device_id", Value: "{user_id_lower}"},
+				},
+			},
+			params: Params{
+				SubID: "test-subid",
+			},
+			expectedErr: "UserID not provided",
+		},
 	}
 
 	for _, tc := range tt {

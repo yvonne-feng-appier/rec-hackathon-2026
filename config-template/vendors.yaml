@@ -3,24 +3,16 @@ vendors:
     with_proxy: true
     http_method: GET
     request:
-      url: "https://api.linkmine.co.kr/coupang/reco/v2/"
+      url: "https://test"
       queries:
         - key: app_code
           value: "{subid}"
         - key: device_id
           value: "{user_id_lower}"
-        - key: device_lmt
-          value: "0"
-        - key: imp_imageSize
-          value: "{width}x{height}"
-        - key: app_bundleId
-          value: ""
-        - key: imp_adType
-          value: "{adtype}"
     tracking:
       url: "{product_url}"
       queries:
-        - key: param1
+        - key: subparam
           value: "{click_id_base64}"
   - name: replace
     {{- with secret "secret/project/recommendation/rec-serving/replace" }}
