@@ -19,12 +19,12 @@ func TestAdpopcorn(t *testing.T) {
 				ClickID:   "click-id-with-special@chars#123",
 				ImgWidth:  1200,
 				ImgHeight: 627,
-				BundleID:  "",
+				BundleID:  "com.example.app",
 				SubID:     "sub-id-456",
 			},
 			want: adpopcornBody{
 				App: adpopcornApp{
-					BundleID: "",
+					BundleID: "com.example.app",
 				},
 				Device: adpopcornDevice{
 					ID:  "testuser123",
