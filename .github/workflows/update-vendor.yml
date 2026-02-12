@@ -31,7 +31,9 @@ jobs:
       - name: Define Vendor Name
         run: |
           VENDOR_NAME=${{ fromJson(inputs.vendor_data).name }}
+          echo $VENDOR_NAME
           echo "VENDOR_NAME=$VENDOR_NAME" >> $GITHUB_ENV
+          echo ${{ inputs.vendor_data }}
 
       - name: Generate Prompt File
         run: |
@@ -60,16 +62,16 @@ jobs:
 
           EOF
 
-      - name: Run Claude Code
-        id: claude
-        uses: anthropics/claude-code-action/base-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: |
-            --allowedTools Write,Edit,View,Bash
-            --max-turns 100
-          prompt_file: task-prompt.txt
-          show_full_output: true
+      # - name: Run Claude Code
+      #   id: claude
+      #   uses: anthropics/claude-code-action/base-action@v1
+      #   with:
+      #     anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+      #     claude_args: |
+      #       --allowedTools Write,Edit,View,Bash
+      #       --max-turns 100
+      #     prompt_file: task-prompt.txt
+      #     show_full_output: true
 
       - name: Remove Temporary Files
         run: rm task-prompt.txt
