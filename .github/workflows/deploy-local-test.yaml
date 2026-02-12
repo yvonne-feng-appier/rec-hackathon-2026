@@ -213,12 +213,21 @@ jobs:
         uses: fjogeleit/http-request-action@v1
         continue-on-error: true
         with:
-          url: '${{ vars.CONFIG_API_HOST }}/v0/recommend/experiments/custom_flow?site_id=android--com.coupang.mobile_s2s_v3&service_type_id=crossx_recommend'
+          url: '${{ vars.CONFIG_API_HOST }}${{vars.CONFIG_API_ENDPOINT}}'
           method: GET
           timeout: 5000 # ms
           retry: 3
           username: ${{ secrets.CONFIG_API_USR}}
           password: ${{ secrets.CONFIG_API_PW }}
+
+      - name: Verify Config API Connectivity
+        run: |
+            if [ "${{ steps.fetch_config_api.outcome }}" == "success" ]; then
+                echo "✅ Config API is accessible - test will use live Config API data"
+            else
+                echo "⚠️ Config API might not be accessible from GitHub Actions runner"
+                echo "The test will use fallback default subids if Config API calls fail"
+            fi
 
       - name: Run E2E tests with server
         env:
@@ -229,15 +238,6 @@ jobs:
           GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_rec_common" go mod download || true
           # Pass environment variables to Docker container for Robot Framework
           CONFIG_API_USR="${{ secrets.CONFIG_API_USR }}" CONFIG_API_PW="${{ secrets.CONFIG_API_PW }}" make run-e2e-with-server
-
-      - name: Verify Config API Connectivity
-        run: |
-          if [ "${{ steps.fetch_config_api.outcome }}" == "success" ]; then
-            echo "✅ Config API is accessible - test will use live Config API data"
-          else
-            echo "⚠️ Config API might not be accessible from GitHub Actions runner"
-            echo "The test will use fallback default subids if Config API calls fail"
-          fi
 
       - name: Test Proxy Connectivity
         continue-on-error: true
@@ -265,23 +265,100 @@ jobs:
             echo "⚠️  Vendor API ${VENDOR_HOST}:443 is NOT reachable directly"
           fi
 
+  manual-test-all:
+    runs-on: ubuntu-latest
+    # needs: update-vendor
+    env:
+      VAULT_ADDR: 'https://vault.appier.us/'
+      VAULT_APPROLE: 'ai-jenkins-gcp'
+      VAULT_KEY_PATH: 'secret/project/recommendation'
+      CHART_DIR: './deploy/rec-vendor-api'
+      CONSUL_TEMPLATE_VERSION: '0.36.0'
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Install Vault CLI
+        run: |
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+          sudo apt-get update && sudo apt-get install -y vault
+
+      - name: Install Consul Template
+        run: |
+          wget -q https://releases.hashicorp.com/consul-template/${CONSUL_TEMPLATE_VERSION}/consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
+          unzip consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
+          sudo mv consul-template /usr/local/bin/
+          rm consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
+          consul-template -version
+
+      - name: Setup Vault Environment (Authenticate and Get Credentials)
+        run: |
+          # Authenticate with Vault using AppRole and persist token (same as local auth method)
+          export VAULT_TOKEN=$(vault write -field=token auth/approle/login \
+            role_id=${{ env.VAULT_APPROLE }} \
+            secret_id=${{ secrets.VAULT_SECRET_ID }})
+          vault login -address ${{ env.VAULT_ADDR }} $VAULT_TOKEN > /dev/null
+          echo "Vault authentication successful"
+
+          # Setup directories
+          mkdir -p secrets
+          mkdir -p ${{ env.CHART_DIR }}/secrets
+
+          # Get SSH key
+          vault kv get -address ${{ env.VAULT_ADDR }} \
+            --field=private_key ${{ env.VAULT_KEY_PATH }}/ssh_key/ai-rec-common > secrets/ai-rec-common-key
+          chmod 600 secrets/ai-rec-common-key
+
+          # Get GCP service account credentials for Docker/GAR authentication
+          vault kv get -address ${{ env.VAULT_ADDR }} \
+            --field=data secret/project/_gcp/iam/appier-ai-recommendation/rec-jenkins-cicd > secrets/gcp-sa-key.json
+
+          # Copy nginx.conf
+          cp ./config-template/nginx.conf ${{ env.CHART_DIR }}/secrets/
+
+          # Decrypt vendor and config files using consul-template
+          consul-template -once -vault-addr ${{ env.VAULT_ADDR }} \
+            -template "./config-template/vendors.yaml:${{ env.CHART_DIR }}/secrets/vendors.yaml"
+          consul-template -once -vault-addr ${{ env.VAULT_ADDR }} \
+            -template "./config-template/config-dev.yaml:${{ env.CHART_DIR }}/secrets/config.yaml"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.6'
+
+      - name: Install gcloud and authenticate Docker with GAR
+        run: |
+          # Install gcloud CLI
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+          curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+          sudo apt-get update && sudo apt-get install -y google-cloud-sdk
+
+          # Authenticate Docker with GAR using service account
+          gcloud auth activate-service-account --key-file=secrets/gcp-sa-key.json
+          gcloud auth configure-docker asia-docker.pkg.dev --quiet
+
+      - name: Setup Git and SSH for Private Modules
+        run: |
+          # Setup SSH for accessing private GitHub repositories
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          touch ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          cp secrets/ai-rec-common-key ~/.ssh/ai_rec_common
+          chmod 600 ~/.ssh/ai_rec_common
+
+          # Configure git to use SSH for GitHub URLs (needed for private Go modules)
+          cat .gitconfig >> ~/.gitconfig
+
       - name: Run Manual Test All
         env:
           DEV_NAME: ${{ github.actor }}-github-action-${{ github.run_id }}
           GOPRIVATE: github.com/plaxieappier
           CI: "true"  # Mark as CI environment for test script
         run: |
+          # Download private modules if needed
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_rec_common" go mod download || true
           make run-manual-test-all-with-server
-
-  # manual-test-all:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout Repo
-  #       uses: actions/checkout@v4
-
-  #     - name: Start service locally
-  #       run: |
-  #         make local
-  #     - name: Run Manual Test All
-  #       run: |
-  #         ./scripts/manual_test_all.sh
