@@ -265,3 +265,14 @@ vendors:
     tracking:
       url: "{product_url}"
       queries: []
+  - name: vendor_post
+    with_proxy: true
+    http_method: POST
+    request:
+      url: "https://vendor_post"
+      queries: []
+    tracking:
+      url: "{product_url}"
+      queries:
+        - key: subparam
+          value: "{click_id_base64}"
