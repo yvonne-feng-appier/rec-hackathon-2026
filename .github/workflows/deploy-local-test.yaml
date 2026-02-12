@@ -10,99 +10,6 @@ env:
   PR_BRANCH_NAME: "update-vendor-base-action"
 
 jobs:
-  # update-vendor:
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     contents: write
-  #     pull-requests: write
-  #     id-token: write
-
-  # #   steps:
-  #     - name: Checkout Repo
-  #       uses: actions/checkout@v4
-
-  #     - name: Generate prompt file
-  #       run: |
-  #         cat > task-prompt.txt <<'EOF'
-  #         You are an AI coding assistant.
-
-  #         You have been assigned to work on the following task:
-
-  #         Read the current vendor configuration from config-template/vendors.yaml.
-  #         Find the vendor named "linkmine" and update its configuration to match the following JSON exactly:
-  #         {
-  #           "name": "linkmine",
-  #           "with_proxy": true,
-  #           "http_method": "GET",
-  #           "request": {
-  #             "url": "https://testtttttt/reco/v2/",
-  #             "queries": [
-  #               {
-  #                 "key": "app_code",
-  #                 "value": "{subid}"
-  #               },
-  #               {
-  #                 "key": "device_id",
-  #                 "value": "{user_id_lower}"
-  #               },
-  #               {
-  #                 "key": "device_lmt",
-  #                 "value": "0"
-  #               },
-  #               {
-  #                 "key": "imp_imageSize",
-  #                 "value": "{width}x{height}"
-  #               },
-  #               {
-  #                 "key": "app_bundleId",
-  #                 "value": ""
-  #               },
-  #               {
-  #                 "key": "imp_adType",
-  #                 "value": "{adtype}"
-  #               }
-  #             ]
-  #           },
-  #           "tracking": {
-  #             "url": "{product_url}",
-  #             "queries": [
-  #               {
-  #                 "key": "param1",
-  #                 "value": "{click_id_base64}"
-  #               }
-  #             ]
-  #           }
-  #         }
-
-  #         If the vendor "linkmine" doesn't exist, add it to the vendors list.
-  #         Preserve the YAML formatting and structure of the file.
-
-  #         IMPORTANT: After completing your changes, you MUST create a git commit.
-  #         If no changes are needed, do NOT create any commit.
-  #         EOF
-
-  #     - name: Run Claude Code
-  #       id: claude
-  #       uses: anthropics/claude-code-action/base-action@v1
-  #       with:
-  #         anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-  #         claude_args: |
-  #           --allowedTools Write,Edit,View,Bash
-  #           --max-turns 10
-  #         prompt_file: task-prompt.txt
-  #         show_full_output: true
-
-  #     - name: Create Pull Request
-  #       id: create_pr
-  #       uses: peter-evans/create-pull-request@v6
-  #       with:
-  #         commit-message: "chore: update vendor config"
-  #         branch: ${{ env.PR_BRANCH_NAME }}
-  #         title: "[GitHub Action] Update Vendor Config"
-  #         body: |
-  #           Auto-generated update. The vendor configuration has been updated.
-  #         assignees: yvonne-feng-appier
-
   run-e2e:
     runs-on: ubuntu-latest
     # needs: update-vendor
@@ -116,97 +23,16 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Install Vault CLI
-        run: |
-          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
-          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-          sudo apt-get update && sudo apt-get install -y vault
-
-      - name: Install Consul Template
-        run: |
-          wget -q https://releases.hashicorp.com/consul-template/${CONSUL_TEMPLATE_VERSION}/consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
-          unzip consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
-          sudo mv consul-template /usr/local/bin/
-          rm consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
-          consul-template -version
-
-      - name: Setup Vault Environment (Authenticate and Get Credentials)
-        run: |
-          # Authenticate with Vault using AppRole and persist token (same as local auth method)
-          export VAULT_TOKEN=$(vault write -field=token auth/approle/login \
-            role_id=${{ env.VAULT_APPROLE }} \
-            secret_id=${{ secrets.VAULT_SECRET_ID }})
-          vault login -address ${{ env.VAULT_ADDR }} $VAULT_TOKEN > /dev/null
-          echo "Vault authentication successful"
-
-          # Setup directories
-          mkdir -p secrets
-          mkdir -p ${{ env.CHART_DIR }}/secrets
-
-          # Get SSH key
-          vault kv get -address ${{ env.VAULT_ADDR }} \
-            --field=private_key ${{ env.VAULT_KEY_PATH }}/ssh_key/ai-rec-common > secrets/ai-rec-common-key
-          chmod 600 secrets/ai-rec-common-key
-
-          # Get GCP service account credentials for Docker/GAR authentication
-          vault kv get -address ${{ env.VAULT_ADDR }} \
-            --field=data secret/project/_gcp/iam/appier-ai-recommendation/rec-jenkins-cicd > secrets/gcp-sa-key.json
-
-          # Copy nginx.conf
-          cp ./config-template/nginx.conf ${{ env.CHART_DIR }}/secrets/
-
-          # Decrypt vendor and config files using consul-template
-          consul-template -once -vault-addr ${{ env.VAULT_ADDR }} \
-            -template "./config-template/vendors.yaml:${{ env.CHART_DIR }}/secrets/vendors.yaml"
-          consul-template -once -vault-addr ${{ env.VAULT_ADDR }} \
-            -template "./config-template/config-dev.yaml:${{ env.CHART_DIR }}/secrets/config.yaml"
-
-    #   - name: Install kubectl
-    #     run: |
-    #       curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-    #       chmod +x kubectl
-    #       sudo mv kubectl /usr/local/bin/
-    #       kubectl version --client
-
-    #   - name: Install Helm
-    #     run: |
-    #       curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-    #       helm version
-
-    #   - name: Install kubectx
-    #     run: |
-    #       sudo apt-get update
-    #       sudo apt-get install -y kubectx
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
         with:
-          go-version: '1.25.6'
-
-      - name: Install gcloud and authenticate Docker with GAR
-        run: |
-          # Install gcloud CLI
-          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-          curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
-          sudo apt-get update && sudo apt-get install -y google-cloud-sdk
-
-          # Authenticate Docker with GAR using service account
-          gcloud auth activate-service-account --key-file=secrets/gcp-sa-key.json
-          gcloud auth configure-docker asia-docker.pkg.dev --quiet
-
-      - name: Setup Git and SSH for Private Modules
-        run: |
-          # Setup SSH for accessing private GitHub repositories
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          touch ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          cp secrets/ai-rec-common-key ~/.ssh/ai_rec_common
-          chmod 600 ~/.ssh/ai_rec_common
-
-          # Configure git to use SSH for GitHub URLs (needed for private Go modules)
-          cat .gitconfig >> ~/.gitconfig
+          vault_addr: ${{ env.VAULT_ADDR }}
+          vault_approle: ${{ env.VAULT_APPROLE }}
+          vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}
+          vault_key_path: ${{ env.VAULT_KEY_PATH }}
+          chart_dir: ${{ env.CHART_DIR }}
+          consul_template_version: ${{ env.CONSUL_TEMPLATE_VERSION }}
+          go_version: '1.25.6'
 
       - name: Fetch Config API Data for E2E Tests
         id: fetch_config_api
@@ -278,80 +104,16 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Install Vault CLI
-        run: |
-          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
-          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-          sudo apt-get update && sudo apt-get install -y vault
-
-      - name: Install Consul Template
-        run: |
-          wget -q https://releases.hashicorp.com/consul-template/${CONSUL_TEMPLATE_VERSION}/consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
-          unzip consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
-          sudo mv consul-template /usr/local/bin/
-          rm consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
-          consul-template -version
-
-      - name: Setup Vault Environment (Authenticate and Get Credentials)
-        run: |
-          # Authenticate with Vault using AppRole and persist token (same as local auth method)
-          export VAULT_TOKEN=$(vault write -field=token auth/approle/login \
-            role_id=${{ env.VAULT_APPROLE }} \
-            secret_id=${{ secrets.VAULT_SECRET_ID }})
-          vault login -address ${{ env.VAULT_ADDR }} $VAULT_TOKEN > /dev/null
-          echo "Vault authentication successful"
-
-          # Setup directories
-          mkdir -p secrets
-          mkdir -p ${{ env.CHART_DIR }}/secrets
-
-          # Get SSH key
-          vault kv get -address ${{ env.VAULT_ADDR }} \
-            --field=private_key ${{ env.VAULT_KEY_PATH }}/ssh_key/ai-rec-common > secrets/ai-rec-common-key
-          chmod 600 secrets/ai-rec-common-key
-
-          # Get GCP service account credentials for Docker/GAR authentication
-          vault kv get -address ${{ env.VAULT_ADDR }} \
-            --field=data secret/project/_gcp/iam/appier-ai-recommendation/rec-jenkins-cicd > secrets/gcp-sa-key.json
-
-          # Copy nginx.conf
-          cp ./config-template/nginx.conf ${{ env.CHART_DIR }}/secrets/
-
-          # Decrypt vendor and config files using consul-template
-          consul-template -once -vault-addr ${{ env.VAULT_ADDR }} \
-            -template "./config-template/vendors.yaml:${{ env.CHART_DIR }}/secrets/vendors.yaml"
-          consul-template -once -vault-addr ${{ env.VAULT_ADDR }} \
-            -template "./config-template/config-dev.yaml:${{ env.CHART_DIR }}/secrets/config.yaml"
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
         with:
-          go-version: '1.25.6'
-
-      - name: Install gcloud and authenticate Docker with GAR
-        run: |
-          # Install gcloud CLI
-          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
-          curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
-          sudo apt-get update && sudo apt-get install -y google-cloud-sdk
-
-          # Authenticate Docker with GAR using service account
-          gcloud auth activate-service-account --key-file=secrets/gcp-sa-key.json
-          gcloud auth configure-docker asia-docker.pkg.dev --quiet
-
-      - name: Setup Git and SSH for Private Modules
-        run: |
-          # Setup SSH for accessing private GitHub repositories
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          touch ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          cp secrets/ai-rec-common-key ~/.ssh/ai_rec_common
-          chmod 600 ~/.ssh/ai_rec_common
-
-          # Configure git to use SSH for GitHub URLs (needed for private Go modules)
-          cat .gitconfig >> ~/.gitconfig
+          vault_addr: ${{ env.VAULT_ADDR }}
+          vault_approle: ${{ env.VAULT_APPROLE }}
+          vault_secret_id: ${{ secrets.VAULT_SECRET_ID }}
+          vault_key_path: ${{ env.VAULT_KEY_PATH }}
+          chart_dir: ${{ env.CHART_DIR }}
+          consul_template_version: ${{ env.CONSUL_TEMPLATE_VERSION }}
+          go_version: '1.25.6'
 
       - name: Run Manual Test All
         env:
