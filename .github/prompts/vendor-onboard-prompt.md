@@ -5,7 +5,7 @@ Find the vendor named "{{VENDOR_NAME}}" and update its configuration to match th
 {{VENDOR_JSON}}
 
 Note that the required fields of the vendor configuration are "name", "with_proxy", "http_method", "request.url", "request.queries" and "tracking.url". If any of these fields are not applicable, still keep them in the config with empty value.
-Note that "body", "response_body" and "headers" are not required fields in the vendor configuration, but they are important for the implementation.
+Note that "body", "response_body" and "headers" are not required fields in the vendor configuration, but they are important for the implementation. Do not add these fields into configuration file.
 
 If the request method is GET, you can ignore the "body". If there are new fields in queries, check if we can support the macro for the value, if not, add the support in the code base.
 
