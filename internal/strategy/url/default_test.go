@@ -70,6 +70,35 @@ func TestDefault(t *testing.T) {
 			expectedErr: "subID not provided",
 		},
 		{
+			name: "GIVEN URL with {sub_id} and SubID provided THEN return the expected URL",
+			urlPattern: config.URLPattern{
+				URL: "https://example.com/image",
+				Queries: []config.Query{
+					{Key: "app_code", Value: "{sub_id}"},
+				},
+			},
+			params: Params{
+				SubID:     "test123",
+				ImgWidth:  300,
+				ImgHeight: 300,
+			},
+			wantURL: "https://example.com/image?app_code=test123",
+		},
+		{
+			name: "GIVEN URL with {sub_id} but SubID not provided THEN return error",
+			urlPattern: config.URLPattern{
+				URL: "https://example.com/image",
+				Queries: []config.Query{
+					{Key: "app_code", Value: "{sub_id}"},
+				},
+			},
+			params: Params{
+				ImgWidth:  300,
+				ImgHeight: 300,
+			},
+			expectedErr: "subID not provided",
+		},
+		{
 			name: "GIVEN url with existing query parameters THEN return the expected URL with existing and parameters from URLPattern config",
 			urlPattern: config.URLPattern{
 				URL: "https://example.com/image/user/abc?imp_adType=1",

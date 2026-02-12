@@ -111,6 +111,11 @@ func (s *Default) GetMacroValue(macro string, params Params) (string, error) {
 			return "", errors.BadRequestErrorf("subID not provided")
 		}
 		return params.SubID, nil
+	case "{sub_id}":
+		if params.SubID == "" {
+			return "", errors.BadRequestErrorf("subID not provided")
+		}
+		return params.SubID, nil
 	case "{product_url}":
 		if params.ProductURL == "" {
 			return "", errors.BadRequestErrorf("ProductURL not provided")
