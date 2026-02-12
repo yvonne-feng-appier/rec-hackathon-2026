@@ -57,7 +57,7 @@ vendors:
       url: "{product_url}"
       queries: []
   - name: inl_corp_1
-    with_proxy: false
+    with_proxy: true
     http_method: GET
     request:
       url: "https://rco.mjbiz.co.kr/reco-js"
