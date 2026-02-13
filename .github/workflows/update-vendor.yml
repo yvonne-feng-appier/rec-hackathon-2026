@@ -301,31 +301,7 @@ jobs:
           chart_dir: ${{ env.CHART_DIR }}
           consul_template_version: ${{ env.CONSUL_TEMPLATE_VERSION }}
           go_version: '1.25.6'
-      - name: Test Proxy Connectivity
-        continue-on-error: true
-        run: |
-            echo "Testing proxy server connectivity..."
-            # Extract proxy host from config (proxy URL format: http://user:pass@host:port)
-            PROXY_HOST="rec-proxy-smp-prd-2.arepa.appier.co"
-            PROXY_PORT="3128"
 
-            # Test if proxy host is reachable
-            if timeout 5 bash -c "cat < /dev/null > /dev/tcp/${PROXY_HOST}/${PROXY_PORT}" 2>/dev/null; then
-                echo "✅ Proxy server ${PROXY_HOST}:${PROXY_PORT} is reachable"
-            else
-                echo "⚠️  Proxy server ${PROXY_HOST}:${PROXY_PORT} is NOT reachable from GitHub Actions"
-                echo "This may cause vendor requests that require proxy to fail"
-                echo "Vendors with 'with_proxy: true' may timeout or fail"
-            fi
-
-            # Also test direct connectivity to vendor API
-            echo "Testing vendor API connectivity..."
-            VENDOR_HOST="rco.mjbiz.co.kr"
-            if timeout 5 bash -c "cat < /dev/null > /dev/tcp/${VENDOR_HOST}/443" 2>/dev/null; then
-                echo "✅ Vendor API ${VENDOR_HOST}:443 is reachable"
-            else
-                echo "⚠️  Vendor API ${VENDOR_HOST}:443 is NOT reachable directly"
-            fi
       - name: Run Manual Test All
         env:
           GOPRIVATE: github.com/plaxieappier
