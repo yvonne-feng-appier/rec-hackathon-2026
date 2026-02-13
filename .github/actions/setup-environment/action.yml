@@ -1,0 +1,118 @@
+name: 'Setup Environment'
+description: 'Setup environment for rec-vendor-api tests (Vault, Consul Template, Go, gcloud, Git/SSH)'
+
+inputs:
+  vault_addr:
+    description: 'Vault server address'
+    required: true
+  vault_approle:
+    description: 'Vault AppRole name'
+    required: true
+  vault_secret_id:
+    description: 'Vault secret ID'
+    required: true
+  vault_key_path:
+    description: 'Vault key path'
+    required: true
+  chart_dir:
+    description: 'Chart directory path'
+    required: true
+  consul_template_version:
+    description: 'Consul Template version'
+    required: true
+    default: '0.36.0'
+  go_version:
+    description: 'Go version'
+    required: true
+    default: '1.25.6'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Vault CLI
+      shell: bash
+      run: |
+        curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+        sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+        sudo apt-get update && sudo apt-get install -y vault
+
+    - name: Install Consul Template
+      shell: bash
+      env:
+        CONSUL_TEMPLATE_VERSION: ${{ inputs.consul_template_version }}
+      run: |
+        wget -q https://releases.hashicorp.com/consul-template/${CONSUL_TEMPLATE_VERSION}/consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
+        unzip consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
+        sudo mv consul-template /usr/local/bin/
+        rm consul-template_${CONSUL_TEMPLATE_VERSION}_linux_amd64.zip
+        consul-template -version
+
+    - name: Setup Vault Environment (Authenticate and Get Credentials)
+      shell: bash
+      env:
+        VAULT_ADDR: ${{ inputs.vault_addr }}
+        VAULT_APPROLE: ${{ inputs.vault_approle }}
+        VAULT_SECRET_ID: ${{ inputs.vault_secret_id }}
+        VAULT_KEY_PATH: ${{ inputs.vault_key_path }}
+        CHART_DIR: ${{ inputs.chart_dir }}
+      run: |
+        # Authenticate with Vault using AppRole and persist token (same as local auth method)
+        export VAULT_TOKEN=$(vault write -field=token auth/approle/login \
+          role_id="${VAULT_APPROLE}" \
+          secret_id="${VAULT_SECRET_ID}")
+        vault login -address "${VAULT_ADDR}" $VAULT_TOKEN > /dev/null
+        echo "Vault authentication successful"
+
+        # Setup directories
+        mkdir -p secrets
+        mkdir -p "${CHART_DIR}"/secrets
+
+        # Get SSH key
+        vault kv get -address "${VAULT_ADDR}" \
+          --field=private_key "${VAULT_KEY_PATH}"/ssh_key/ai-rec-common > secrets/ai-rec-common-key
+        chmod 600 secrets/ai-rec-common-key
+
+        # Get GCP service account credentials for Docker/GAR authentication
+        vault kv get -address "${VAULT_ADDR}" \
+          --field=data secret/project/_gcp/iam/appier-ai-recommendation/rec-jenkins-cicd > secrets/gcp-sa-key.json
+
+        # Copy nginx.conf
+        cp ./config-template/nginx.conf "${CHART_DIR}"/secrets/
+
+        # Decrypt vendor and config files using consul-template
+        consul-template -once -vault-addr "${VAULT_ADDR}" \
+          -template "./config-template/vendors.yaml:${CHART_DIR}/secrets/vendors.yaml"
+        consul-template -once -vault-addr "${VAULT_ADDR}" \
+          -template "./config-template/config-dev.yaml:${CHART_DIR}/secrets/config.yaml"
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go_version }}
+
+    - name: Install gcloud and authenticate Docker with GAR
+      shell: bash
+      run: |
+        # Install gcloud CLI
+        echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+        curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
+        sudo apt-get update && sudo apt-get install -y google-cloud-sdk
+
+        # Authenticate Docker with GAR using service account
+        gcloud auth activate-service-account --key-file=secrets/gcp-sa-key.json
+        gcloud auth configure-docker asia-docker.pkg.dev --quiet
+
+    - name: Setup Git and SSH for Private Modules
+      shell: bash
+      run: |
+        # Setup SSH for accessing private GitHub repositories
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        touch ~/.ssh/known_hosts
+        chmod 644 ~/.ssh/known_hosts
+        ssh-keyscan github.com >> ~/.ssh/known_hosts
+        cp secrets/ai-rec-common-key ~/.ssh/ai_rec_common
+        chmod 600 ~/.ssh/ai_rec_common
+
+        # Configure git to use SSH for GitHub URLs (needed for private Go modules)
+        cat .gitconfig >> ~/.gitconfig

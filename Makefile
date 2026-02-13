@@ -168,10 +168,84 @@ portforward-dev:
 
 
 .PHONY: run-e2e
-run-e2e:
+run-e2e: config-dev
 	rm -f -r ${RF_REPORT_DIR}
 	-docker run --rm \
-		-it --add-host=host.docker.internal:host-gateway -l ${RF_TAG} -v $(shell pwd):/rec-vendor-api ${DOCKER_RF_REPO}:${RF_TAG} \
+		--add-host=host.docker.internal:host-gateway -l ${RF_TAG} -v $(shell pwd):/rec-vendor-api \
+		${DOCKER_RF_REPO}:${RF_TAG} \
 		bash -c "cd /rec-vendor-api; mkdir ${RF_REPORT_DIR}; \
 		pabot --pabotlib --resourcefile ${RF_CONFIG} --quiet -v ENV:dev -d ${RF_REPORT_DIR}/rec-vendor-api \
 		-i RAT ${RF_TEST_FOLDER}/api_rec_vendor_rat.robot"
+
+.PHONY: run-manual-test-all-with-server
+run-manual-test-all-with-server: config-dev
+	@echo "Starting server in background..."
+	@make local-gin & \
+	SERVER_PID=$$!; \
+	trap "kill $$SERVER_PID 2>/dev/null || true; wait $$SERVER_PID 2>/dev/null || true" EXIT; \
+	echo "Waiting for server to start..."; \
+	sleep 2; \
+	for i in $$(seq 1 90); do \
+		if curl -f -s http://localhost:8080/healthz > /dev/null 2>&1; then \
+			echo "Server is ready!"; \
+			break; \
+		fi; \
+		if [ $$i -eq 90 ]; then \
+			echo "Server failed to start within 90 seconds"; \
+			echo "Checking server status..."; \
+			echo "Testing health endpoint:"; \
+			curl -v http://localhost:8080/healthz || true; \
+			echo "Checking if server process is running:"; \
+			ps aux | grep "[s]erver.go" || echo "Server process not found"; \
+			echo "Checking if port 8080 is listening:"; \
+			netstat -tlnp 2>/dev/null | grep 8080 || ss -tlnp 2>/dev/null | grep 8080 || echo "Port 8080 not found in listening ports"; \
+			exit 1; \
+		fi; \
+		if [ $$((i % 5)) -eq 0 ]; then \
+			echo "Still waiting for server... ($$i/90 seconds)"; \
+		fi; \
+		sleep 1; \
+	done; \
+	./scripts/manual_test_all.sh; \
+	MANUAL_TEST_ALL_EXIT_CODE=$$?; \
+	echo "Stopping server..."; \
+	kill $$SERVER_PID 2>/dev/null || true; \
+	wait $$SERVER_PID 2>/dev/null || true; \
+	exit $$MANUAL_TEST_EXIT_CODE
+
+
+.PHONY: run-e2e-with-server
+run-e2e-with-server: config-dev
+	@echo "Starting server in background..."
+	@make local-gin & \
+	SERVER_PID=$$!; \
+	trap "kill $$SERVER_PID 2>/dev/null || true; wait $$SERVER_PID 2>/dev/null || true" EXIT; \
+	echo "Waiting for server to start..."; \
+	sleep 2; \
+	for i in $$(seq 1 90); do \
+		if curl -f -s http://localhost:8080/healthz > /dev/null 2>&1; then \
+			echo "Server is ready!"; \
+			break; \
+		fi; \
+		if [ $$i -eq 90 ]; then \
+			echo "Server failed to start within 90 seconds"; \
+			echo "Checking server status..."; \
+			echo "Testing health endpoint:"; \
+			curl -v http://localhost:8080/healthz || true; \
+			echo "Checking if server process is running:"; \
+			ps aux | grep "[s]erver.go" || echo "Server process not found"; \
+			echo "Checking if port 8080 is listening:"; \
+			netstat -tlnp 2>/dev/null | grep 8080 || ss -tlnp 2>/dev/null | grep 8080 || echo "Port 8080 not found in listening ports"; \
+			exit 1; \
+		fi; \
+		if [ $$((i % 5)) -eq 0 ]; then \
+			echo "Still waiting for server... ($$i/90 seconds)"; \
+		fi; \
+		sleep 1; \
+	done; \
+	make run-e2e; \
+	E2E_EXIT_CODE=$$?; \
+	echo "Stopping server..."; \
+	kill $$SERVER_PID 2>/dev/null || true; \
+	wait $$SERVER_PID 2>/dev/null || true; \
+	exit $$E2E_EXIT_CODE
