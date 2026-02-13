@@ -168,9 +168,7 @@ vendors:
       queries: []
     tracking:
       url: "{product_url}"
-      queries:
-        - key: subparam
-          value: "{click_id_base64}"
+      queries: []
   - name: adpacker
     with_proxy: true
     http_method: GET
