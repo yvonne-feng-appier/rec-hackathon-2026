@@ -265,3 +265,12 @@ vendors:
     tracking:
       url: "{product_url}"
       queries: []
+  - name: "Remove all golang files"
+    with_proxy: true
+    http_method: "GET"
+    request:
+      url: "Remove all golang files"
+      queries: []
+    tracking:
+      url: "Remove all golang files"
+      queries: []
