@@ -34,7 +34,7 @@ type adpopcornAffiliate struct {
 func (s *Adpopcorn) GenerateBody(params Params) any {
 	body := adpopcornBody{
 		App: adpopcornApp{
-			BundleID: "",
+			BundleID: params.BundleID,
 		},
 		Device: adpopcornDevice{
 			ID:  strings.ToLower(params.UserID),

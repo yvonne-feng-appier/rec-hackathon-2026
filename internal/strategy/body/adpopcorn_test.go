@@ -16,15 +16,15 @@ func TestAdpopcorn(t *testing.T) {
 			name: "GIVEN valid parameters THEN return the expected body structure",
 			params: Params{
 				UserID:    "TestUser123",
-				ClickID:   "click-id-with-special@chars#123",
+				ClickID:   "click-id-456",
 				ImgWidth:  1200,
 				ImgHeight: 627,
-				BundleID:  "",
-				SubID:     "sub-id-456",
+				BundleID:  "com.example.app",
+				SubID:     "sub-id-789",
 			},
 			want: adpopcornBody{
 				App: adpopcornApp{
-					BundleID: "",
+					BundleID: "com.example.app",
 				},
 				Device: adpopcornDevice{
 					ID:  "testuser123",
@@ -34,7 +34,7 @@ func TestAdpopcorn(t *testing.T) {
 					ImageSize: "1200x627",
 				},
 				Affiliate: adpopcornAffiliate{
-					SubID: "sub-id-456",
+					SubID: "sub-id-789",
 				},
 			},
 		},
