@@ -265,3 +265,20 @@ vendors:
     tracking:
       url: "{product_url}"
       queries: []
+  - name: vendor_get
+    with_proxy: true
+    http_method: GET
+    request:
+      url: "https://vendor_get.test"
+      queries:
+        - key: app_code
+          value: "{subid}"
+        - key: image_size
+          value: "{width}x{height}"
+        - key: user_id
+          value: "{user_id_lower}"
+    tracking:
+      url: "{product_url}"
+      queries:
+        - key: subparam
+          value: "{click_id_base64}"
